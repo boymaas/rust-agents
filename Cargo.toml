@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 tokio = { version = "0.2.16", features = ["rt-core", "time", "macros", "sync"] }
+failure = "0.1.7"
