@@ -1,6 +1,5 @@
-use tokio::sync::mpsc::{channel,Sender,Receiver};
+use tokio::sync::mpsc::{Sender,Receiver};
 use tokio::sync::oneshot;
-use tokio::select;
 
 use crate::time::{sleep};
 
@@ -8,27 +7,38 @@ mod message;
 pub use message::{Message};
 
 
-// Ctrl channel
-// Quit
-// Health -> Healty or not
+/// Control Request Type
 #[derive(Debug)]
 pub enum Ctrl {
     Quit,
-    Health(oneshot::Sender<HealthResponse>)
+    Health
+}
+
+/// Control Repsonse Type
+#[derive(Debug)]
+pub enum CtrlR {
+    Quit(QuitR),
+    Health(HealthR),
 }
 
 #[derive(Debug)]
-pub enum HealthResponse {
+pub enum QuitR {
+   Ok
+}
+
+#[derive(Debug)]
+pub enum HealthR {
     Healthy,
     UnHealthy
 }
 
-pub async fn message_generator(mut ctrl: Receiver<Ctrl>, mut channel: Sender<Message>) {
+/// The spawn function of the agent
+pub async fn message_generator(mut ctrl: Receiver<(Ctrl, oneshot::Sender<CtrlR>)>, mut channel: Sender<Message>) {
     loop {
         tokio::select! {
             msg = channel.send(Message::Hello) =>
                 match msg  {
-                    Ok(()) => sleep(100).await,
+                    Ok(()) => sleep(500).await,
                     Err(_) => {
                         eprintln!("Error sending message");
                         break;
@@ -36,12 +46,15 @@ pub async fn message_generator(mut ctrl: Receiver<Ctrl>, mut channel: Sender<Mes
                 },
             ctl = ctrl.recv() => {
                 match ctl {
-                    Some(Ctrl::Quit) => break,
-                    Some(Ctrl::Health(rtx)) => {
-                        rtx.send(HealthResponse::Healthy).unwrap()
+                    Some((Ctrl::Quit, rtx)) => {
+                        rtx.send(CtrlR::Quit(QuitR::Ok)).expect("unable to respond to ctrl message");
+                        break;
+                    },
+                    Some((Ctrl::Health, rtx)) => {
+                        rtx.send(CtrlR::Health(HealthR::Healthy)).expect("unable to respond to ctrl message");
                     }
                     None => break // all senders have dropped
-                } 
+                }
             }
         }
     }
